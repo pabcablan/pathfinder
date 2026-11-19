@@ -37,33 +37,39 @@ jobs:
           echo "artifact=${ARTIFACT}" >> $GITHUB_OUTPUT
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
     outputs:
-        group: ${{ steps.extract.outputs.group }}
-        artifact: ${{ steps.extract.outputs.artifact }}
-        version: ${{ steps.extract.outputs.version }}
+      group: ${{ steps.extract.outputs.group }}
+      artifact: ${{ steps.extract.outputs.artifact }}
+      version: ${{ steps.extract.outputs.version }}
 
   build:
-    runs-on: ubuntu-22.04
+    runs-on: ${{ matrix.os }}
     needs: archetype
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, ubuntu-24.04]
+        distribution: [temurin, zulu]
     steps:
       - name: Descargar código fuente
         uses: actions/checkout@v4
 
-      - name: Configurar JDK 21
+      - name: Configurar JDK 21 (${{ matrix.distribution }})
         uses: actions/setup-java@v4
         with:
           java-version: '21'
-          distribution: 'temurin'
+          distribution: ${{ matrix.distribution }}
 
       - name: Restaurar caché de dependencias de Maven
         uses: actions/cache@v4
         with:
           path: ~/.m2/repository
-          key: maven-dependencies-${{ needs.archetype.outputs.artifact }}-${{ needs.archetype.outputs.version }}
+          key: maven-dependencies-${{ matrix.os }}-${{ matrix.distribution }}-${{ needs.archetype.outputs.artifact }}-${{ needs.archetype.outputs.version }}
 
       - name: Construir proyecto con Maven
         run: mvn clean compile test package verify
 
       - name: Guardar JAR
+        if: matrix.os == 'ubuntu-22.04' && matrix.distribution == 'temurin'
         uses: actions/upload-artifact@v4
         with:
           name: jar-artifact
@@ -73,6 +79,7 @@ jobs:
         run: mvn jacoco:report
 
       - name: Guardar reporte de cobertura
+        if: matrix.os == 'ubuntu-22.04' && matrix.distribution == 'temurin'
         uses: actions/upload-artifact@v4
         with:
           name: coverage-report
